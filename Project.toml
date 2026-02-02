@@ -1,0 +1,4 @@
+name = "BiqCrunch"
+uuid = "579a2c09-967a-4d10-82f0-b0fdaa4996f2"
+version = "0.1.0"
+authors = ["Gustavo Prolla Lacroix <gustavo.prolla-lacroix@grenoble-inp.org>"]
