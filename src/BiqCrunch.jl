@@ -18,9 +18,8 @@ function getijval(F, f, n, m)
 		for at in f.affine_terms
 			q *= "$m 1 $(at.variable.value) $(n+1) $(at.coefficient/2)\n"
 		end
-
 	else
-		error("unsupported function type")
+		error("unsupported function type: $F")
 	end
 	return q
 end
@@ -30,11 +29,12 @@ function lp2bc(lp_file::String, bc_file::String)
 	MOI.read_from_file(lp_model, lp_file)
 	output = ""
 
-
-	# TODO: Assert model is binary quadratic.
-
 	# Output variable names
 	vars = MOI.get(lp_model, MOI.ListOfVariableIndices())
+	for var in vars
+		ci = MOI.ConstraintIndex{MOI.VariableIndex, MOI.ZeroOne}(var.value)
+		@assert MOI.is_valid(lp_model, ci)
+	end
 	n = length(vars)
 	var_strings = map(v -> 
 		   "#\t$(v.value): $(MOI.get(lp_model, MOI.VariableName(), v))",
@@ -58,11 +58,8 @@ function lp2bc(lp_file::String, bc_file::String)
 	obj_fun = MOI.get(lp_model, MOI.ObjectiveFunction{obj_fun_type}())
 	Q *= getijval(obj_fun_type, obj_fun, n, 0)
 	mi = me = 0
-	supp_funs = [MOI.ScalarQuadraticFunction{Float64}, MOI.ScalarAffineFunction{Float64}]
-	supp_sets = [MOI.LessThan{Float64}, MOI.EqualTo{Float64}, MOI.GreaterThan{Float64}]
-	supp_constraints = Iterators.product(supp_funs, supp_sets)
-	for sc in supp_constraints
-		F, S = sc
+	constraint_types = filter(x -> x[1] != MOI.VariableIndex, MOI.get(lp_model, MOI.ListOfConstraintTypesPresent()))
+	for (F, S) in constraint_types 
 		cis = MOI.get(lp_model, MOI.ListOfConstraintIndices{F, S}())
 		for ci in cis
 			if S == MOI.EqualTo{Float64} me += 1 else mi += 1 end
@@ -84,7 +81,6 @@ function lp2bc(lp_file::String, bc_file::String)
 	output *= "$(join(rhs, " "))\n"
 	output *= Q
 
-	println(output)
 	write(bc_file, output)
 end
 
@@ -101,13 +97,13 @@ function get_var_mapping(bc_file::String)
 	return map
 end
 
-function solve(bq_exe::String, bq_params::String, lp_file::String)
+function solve(bq_exe::String, bq_params::String, lp_file::String, lp2bcfun=lp2bc)
 	@assert isfile(bq_exe)
 	@assert isfile(bq_params)
 	@assert isfile(lp_file)
 
 	bc_file = tempname()
-	lp2bc(lp_file, bc_file)
+	lp2bcfun(lp_file, bc_file)
 	
 	
 	output = read(`$bq_exe $bc_file $bq_params`, String)
