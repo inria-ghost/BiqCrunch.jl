@@ -1,7 +1,10 @@
 import BiqCrunch
+import MathOptInterface as MOI
 
 # NOTE: Assumes BiqCrunch is installed in the home directory
 
+## TODO:
+# * add tests for bcfile generation
 
 function lp2bcpy(lp_file::String, bc_file::String)
     script_path = expanduser("~/BiqCrunch/tools/lp2bc.py")
@@ -13,14 +16,15 @@ bq_params = expanduser("~/BiqCrunch/problems/generic/biq_crunch.param")
 problems = [
     expanduser("~/BiqCrunch/problems/generic/example.lp"),
     expanduser("~/BiqCrunch/problems/generic/examples/randprob.lp"),
-    expanduser("~/BiqCrunch/problems/k-cluster/example.lp"),
-    # expanduser("~/BiqCrunch/problems/generic/examples/randprob_square.lp"),
-    # expanduser("~/BiqCrunch/problems/generic/examples/randprob_prod.lp"),
 ]
 
 for p in problems
-    r1 = BiqCrunch.solve(bq_exe, bq_params, p)
-    r2 = BiqCrunch.solve(bq_exe, bq_params, p, lp2bcpy)
-    @assert r1 == r2
-    println("$p : OK")
+    model = BiqCrunch.Optimizer(bq_exe, bq_params)
+    src = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_LP)
+    MOI.read_from_file(src, p)
+    MOI.optimize!(model, src)
+    println(MOI.get(model, MOI.ObjectiveValue()))
+    for var in MOI.get(src, MOI.ListOfVariableIndices())
+        println("$var  =>  $(MOI.get(model, MOI.VariablePrimal(), var))")
+    end
 end

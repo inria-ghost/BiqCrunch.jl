@@ -2,8 +2,6 @@ module BiqCrunch
 
 import MathOptInterface as MOI
 
-# NOTE: Assumes BiqCrunch is installed in the home directory
-
 function getijval(F, f, n, m)
     q = ""
     if F == MOI.ScalarAffineFunction{Float64}
@@ -86,46 +84,7 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
     write(bcfile, output)
 end
 
-function lp2bc(lp_file::String, bcfile::String)
-    model = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_LP)
-    MOI.read_from_file(model, lp_file)
-    model2bc(model, bcfile)
-end
 
-function get_var_mapping(bcfile::String)
-    map = Dict{Int,String}()
-    re = r"#[[:blank:]]+(?<id>\d+):[[:blank:]]+(?<varname>[[:alnum:]]+)"
-    f = read(bcfile, String)
-    while occursin(re, f)
-        m = match(re, f)
-        map[parse(Int, m["id"])] = m["varname"]
-        next = m.offset + length(m.match)
-        f = f[next:end]
-    end
-    return map
-end
-
-function solve(bq_exe::String, bq_params::String, lp_file::String, lp2bcfun = lp2bc)
-    @assert isfile(bq_exe)
-    @assert isfile(bq_params)
-    @assert isfile(lp_file)
-
-    bcfile = tempname()
-    lp2bcfun(lp_file, bcfile)
-
-
-    output = read(`$bq_exe $bcfile $bq_params`, String)
-    re = r"Maximum value = (?<obj_value>\d+)\RSolution = \{(?<sol>[[:digit:][:blank:]]+)\}"
-    m = match(re, output)
-
-    map = get_var_mapping(bcfile)
-    sol = Dict(collect(values(map)) .=> 0)
-    broadcast(function (id)
-        sol[map[id]] = 1
-    end, parse.(Int, split(m["sol"])))
-
-    return parse(Int, m["obj_value"]), sol
-
-end
+include("MOI_wrapper.jl")
 
 end # module BiqCrunch
