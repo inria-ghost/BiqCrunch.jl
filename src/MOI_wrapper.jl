@@ -6,7 +6,9 @@ mutable struct _Solution
     param_file::String
     nodes::Int64
     rnode_bound::Float64
+    infeasible::Bool
     obj_value::Int64
+    gap::Float64
     variables::Vector{Int64}
     values::Dict{Int64,Int64}
     cpu_time::Float64
@@ -22,8 +24,9 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     name::String
     bcfile::String
     solution::_Solution
+    raw_output_string::String
 
-    function Optimizer(bin::String, paramfile::String)
+    function Optimizer(bin::String, paramfile::String = "")
         m = new()
         m.bin = bin
         m.paramfile = paramfile
@@ -35,11 +38,12 @@ end
 function MOI.empty!(model::Optimizer)
     model.name = ""
     model.bcfile = ""
+    model.raw_output_string = ""
     empty!(model.solution)
 end
 
 function MOI.is_empty(model::Optimizer)
-    return isempty(name) && isempty(bcfile) && isempty(model.solution)
+	return isempty(model.name) && isempty(model.bcfile) && isempty(model.raw_output_string) && isempty(model.solution)
 end
 
 function Base.summary(io::IO, model::Optimizer)
@@ -63,6 +67,7 @@ MOI.set(model::Optimizer, ::MOI.Name, name::String) = (model.name = name)
 
 MOI.supports(::Optimizer, ::MOI.Silent) = false
 
+# NOTE: should I add MOI.LessThan,MOI.GreatherThan,MOI.EqualTo ?
 function MOI.supports_constraint(
     ::Optimizer,
     ::Type{MOI.VariableIndex},
@@ -86,19 +91,30 @@ function _solve(bq_exe::String, bq_params::String, bcfile::String)
 
     output = read(`$bq_exe $bcfile $bq_params`, String)
     re = r"""
-    Output file:\s*(?<output_file>(/.+)+)
-    Input file:\s*(?<input_file>(/.+)+)
-    Parameter file:\s*(?<param_file>(/.+)+)
-    (?s:.*?)
-    Nodes = (?<nodes>\d+)
-    Root node bound = (?<rnode_bound>\d+\.\d+)
-    Maximum value = (?<obj_value>\d+)
-    Solution = \{(?<sol>[[:digit:][:blank:]]+)\}
-    CPU time = (?<cpu_time>\d+\.\d+) s
-    """
+    Output\ file:\s*(?<output_file>.*)\n
+    Input\ file:\s*(?<input_file>.*)\n
+    Parameter\ file:\s*(?<param_file>.*)\n
+    (?s:.*?) # Skips setup logs
+    Nodes\ =\ (?<nodes>\d+)\n
+    Root\ node\ bound\ =\ (?<rnode_bound>-?\d+\.\d+)\n
+    (?:
+        # Branch 1: Infeasible
+        Problem\ is\ infeasible\.
+        (?<status_infeasible>) # Empty capture to flag this branch
+    |
+        # Branch 2: Optimal
+        (?:Maximum|Minimum)\ value\ =\ (?<obj_value>-?\d+)\n
+        Solution\ =\ \{(?<sol>[[:digit:][:blank:]]+)\}
+    |
+        # Branch 3: Early Stop
+        Best\ value\ =\ (?<best_value>-?\d+|inf)\n
+        (?:Current\ bound\ =\ -?\d+\.\d+\n)?
+        Gap\ =\ (?<gap>\d+\.\d+)
+    )
+    \n\s*CPU\ time\ =\ (?<cpu_time>\d+\.\d+)\ s
+    """x
 
     m = match(re, output)
-    restults = nothing
     if m !== nothing
         results = _Solution(
             m["input_file"],
@@ -106,8 +122,10 @@ function _solve(bq_exe::String, bq_params::String, bcfile::String)
             m["param_file"],
             parse(Int, m["nodes"]),
             parse(Float64, m["rnode_bound"]),
-            parse(Int, m["obj_value"]),
-            parse.(Int, split(m["sol"])),
+            m["status_infeasible"] !== nothing,
+            parse(Int, something(m["obj_value"], m["best_value"], "0")),
+            parse(Float64, something(m["gap"], "0.0")),
+            parse.(Int, split(something(m["sol"], ""))),
             Dict(),
             parse(Float64, m["cpu_time"]),
         )
@@ -115,14 +133,19 @@ function _solve(bq_exe::String, bq_params::String, bcfile::String)
         error("Regex matching failed on solver log output")
     end
 
-    return results
+    return results, output
 
 end
 
 function MOI.optimize!(model::Optimizer, src::MOI.ModelLike)
+    if model.paramfile == ""
+        model.paramfile = tempname()
+        write(model.paramfile, "")
+    end
     model.bcfile = tempname()
     index_map = model2bc(src, model.bcfile)
-    model.solution = _solve(model.bin, model.paramfile, model.bcfile)
+    model.solution, model.raw_output_string =
+        _solve(model.bin, model.paramfile, model.bcfile)
     n = MOI.get(src, MOI.NumberOfVariables())
     (x -> model.solution.values[x] = 0).(1:n)
     (x -> model.solution.values[x] = 1).(model.solution.variables)
@@ -133,10 +156,24 @@ end
 MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 
 function MOI.get(m::Optimizer, ::MOI.PrimalStatus)
-    if m.solution == nothing
+    if m.solution == nothing || m.solution.infeasible || m.solution.gap !== 0.0
         return MOI.NO_SOLUTION
     else
         return MOI.FEASIBLE_POINT
+    end
+end
+
+MOI.get(m::Optimizer, ::MOI.RawStatusString) = m.raw_output_string
+
+function MOI.get(m::Optimizer, ::MOI.TerminationStatus)
+    if m.solution == nothing
+        return MOI.OPTIMIZE_NOT_CALLED
+    elseif m.solution.infeasible
+        return MOI.INFEASIBLE
+    elseif m.solution.gap == 0.0
+        return MOI.OPTIMAL
+    else
+        return MOI.OTHER_LIMIT
     end
 end
 
@@ -148,3 +185,5 @@ MOI.get(m::Optimizer, ::MOI.SolveTimeSec) = m.solution.cpu_time
 
 MOI.get(m::Optimizer, ::MOI.VariablePrimal, v::MOI.VariableIndex) =
     m.solution.values[v.value]
+
+MOI.get(m::Optimizer, ::MOI.NodeCount) = m.solution.nodes

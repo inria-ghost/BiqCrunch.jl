@@ -12,19 +12,23 @@ function lp2bcpy(lp_file::String, bc_file::String)
 end
 
 bq_exe = expanduser("~/BiqCrunch/problems/generic/biqcrunch")
-bq_params = expanduser("~/BiqCrunch/problems/generic/biq_crunch.param")
 problems = [
     expanduser("~/BiqCrunch/problems/generic/example.lp"),
     expanduser("~/BiqCrunch/problems/generic/examples/randprob.lp"),
 ]
 
 for p in problems
-    model = BiqCrunch.Optimizer(bq_exe, bq_params)
+    println(p)
+    model = BiqCrunch.Optimizer(bq_exe)
     src = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_LP)
     MOI.read_from_file(src, p)
     index, _ = MOI.optimize!(model, src)
+    println(MOI.get(model, MOI.TerminationStatus()))
+    println(MOI.get(model, MOI.PrimalStatus()))
     println(MOI.get(model, MOI.ObjectiveValue()))
     for var in MOI.get(src, MOI.ListOfVariableIndices())
         println("$var  =>  $(MOI.get(model, MOI.VariablePrimal(), index[var]))")
     end
+    println(MOI.get(model, MOI.SolveTimeSec()))
+    println(MOI.get(model, MOI.NodeCount()))
 end
