@@ -25,11 +25,20 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     bcfile::String
     solution::_Solution
     raw_output_string::String
+    timelimit::Union{Nothing,Real}
 
     function Optimizer(bin::String, paramfile::String = "")
         m = new()
         m.bin = bin
         m.paramfile = paramfile
+        if m.paramfile == ""
+            m.paramfile = tempname()
+            write(m.paramfile, "")
+        end
+	@assert isfile(m.paramfile)
+	params = read(m.paramfile, String)
+	rm = match(r"^time_limit\s*=\s*(?<limit>(?:\d+|\d+\.\d+))", params)
+	m.timelimit = (rm !== nothing) ? parse(Float64, rm[:limit]) : nothing
         return m
     end
 
@@ -43,7 +52,10 @@ function MOI.empty!(model::Optimizer)
 end
 
 function MOI.is_empty(model::Optimizer)
-	return isempty(model.name) && isempty(model.bcfile) && isempty(model.raw_output_string) && isempty(model.solution)
+    return isempty(model.name) &&
+           isempty(model.bcfile) &&
+           isempty(model.raw_output_string) &&
+           isempty(model.solution)
 end
 
 function Base.summary(io::IO, model::Optimizer)
@@ -66,6 +78,31 @@ MOI.get(model::Optimizer, ::MOI.Name) = model.name
 MOI.set(model::Optimizer, ::MOI.Name, name::String) = (model.name = name)
 
 MOI.supports(::Optimizer, ::MOI.Silent) = false
+
+MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
+
+MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.timelimit
+
+function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
+    model.timelimit = limit
+    params = read(model.paramfile, String)
+    re = r"^time_limit\s*=\s*\d+\.?\d*.*\n?"m
+
+    if isnothing(limit)
+        new_params = replace(params, re => "")
+    else
+        replacement = "time_limit = $limit\n"
+        new_params = replace(params, re => replacement)
+        if new_params == params
+            prefix = (isempty(params) || endswith(params, '\n')) ? "" : "\n"
+            new_params = params * prefix * replacement
+        end
+    end
+
+    write(model.paramfile, new_params)
+
+    return
+end
 
 # NOTE: should I add MOI.LessThan,MOI.GreatherThan,MOI.EqualTo ?
 function MOI.supports_constraint(
@@ -138,10 +175,6 @@ function _solve(bq_exe::String, bq_params::String, bcfile::String)
 end
 
 function MOI.optimize!(model::Optimizer, src::MOI.ModelLike)
-    if model.paramfile == ""
-        model.paramfile = tempname()
-        write(model.paramfile, "")
-    end
     model.bcfile = tempname()
     index_map = model2bc(src, model.bcfile)
     model.solution, model.raw_output_string =
