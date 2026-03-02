@@ -22,9 +22,9 @@ for p in problems
     model = BiqCrunch.Optimizer(bq_exe, bq_params)
     src = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_LP)
     MOI.read_from_file(src, p)
-    MOI.optimize!(model, src)
+    index, _ = MOI.optimize!(model, src)
     println(MOI.get(model, MOI.ObjectiveValue()))
     for var in MOI.get(src, MOI.ListOfVariableIndices())
-        println("$var  =>  $(MOI.get(model, MOI.VariablePrimal(), var))")
+        println("$var  =>  $(MOI.get(model, MOI.VariablePrimal(), index[var]))")
     end
 end

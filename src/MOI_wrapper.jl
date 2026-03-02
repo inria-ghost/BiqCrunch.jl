@@ -121,13 +121,12 @@ end
 
 function MOI.optimize!(model::Optimizer, src::MOI.ModelLike)
     model.bcfile = tempname()
-    model2bc(src, model.bcfile)
+    index_map = model2bc(src, model.bcfile)
     model.solution = _solve(model.bin, model.paramfile, model.bcfile)
     n = MOI.get(src, MOI.NumberOfVariables())
     (x -> model.solution.values[x] = 0).(1:n)
     (x -> model.solution.values[x] = 1).(model.solution.variables)
 
-    index_map = MOI.Utilities.identity_index_map(src)
     return index_map, false
 end
 

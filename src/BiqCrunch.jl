@@ -2,18 +2,18 @@ module BiqCrunch
 
 import MathOptInterface as MOI
 
-function getijval(F, f, n, m)
+function getijval(F, f, n, m, index_map)
     q = ""
     if F == MOI.ScalarAffineFunction{Float64}
         for t in f.terms
-            q *= "$m 1 $(t.variable.value) $(n+1) $(t.coefficient/2)\n"
+            q *= "$m 1 $(index_map[t.variable].value) $(n+1) $(t.coefficient/2)\n"
         end
     elseif F == MOI.ScalarQuadraticFunction{Float64}
         for qt in f.quadratic_terms
-            q *= "$m 1 $(qt.variable_1.value) $(qt.variable_2.value) $(qt.coefficient/2)\n"
+            q *= "$m 1 $(index_map[qt.variable_1].value) $(index_map[qt.variable_2].value) $(qt.coefficient/2)\n"
         end
         for at in f.affine_terms
-            q *= "$m 1 $(at.variable.value) $(n+1) $(at.coefficient/2)\n"
+            q *= "$m 1 $(index_map[at.variable].value) $(n+1) $(at.coefficient/2)\n"
         end
     else
         error("unsupported function type: $F")
@@ -25,13 +25,18 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
     output = ""
 
     # Output variable names
+    index_map = MOI.IndexMap()
     vars = MOI.get(model, MOI.ListOfVariableIndices())
+    i = 1
     for var in vars
+        index_map[var] = MOI.VariableIndex(i)
+        i += 1
         ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.ZeroOne}(var.value)
         @assert MOI.is_valid(model, ci)
     end
     n = length(vars)
-    var_strings = map(v -> "#\t$(v.value): $(MOI.get(model, MOI.VariableName(), v))", vars)
+    var_strings =
+        map(v -> "#\t$(index_map[v].value): $(MOI.get(model, MOI.VariableName(), v))", vars)
     output *= "# List of binary variables:\n$(join(var_strings, "\n"))\n"
 
     # Output max/min
@@ -49,7 +54,7 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
     Q = "";
     obj_fun_type = MOI.get(model, MOI.ObjectiveFunctionType())
     obj_fun = MOI.get(model, MOI.ObjectiveFunction{obj_fun_type}())
-    Q *= getijval(obj_fun_type, obj_fun, n, 0)
+    Q *= getijval(obj_fun_type, obj_fun, n, 0, index_map)
     mi = me = 0
     constraint_types = filter(
         x -> x[1] != MOI.VariableIndex,
@@ -66,7 +71,7 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
             fun = MOI.get(model, MOI.ConstraintFunction(), ci)
             set = MOI.get(model, MOI.ConstraintSet(), ci)
             push!(rhs, MOI.constant(set))
-            Q *= getijval(F, fun, n, mi + me)
+            Q *= getijval(F, fun, n, mi + me, index_map)
             if S == MOI.LessThan{Float64}
                 Q *= "$(mi + me) 2 $mi $mi 1.0\n"
             elseif S == MOI.GreaterThan{Float64}
@@ -82,6 +87,7 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
     output *= Q
 
     write(bcfile, output)
+    return index_map
 end
 
 
