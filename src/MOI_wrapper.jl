@@ -250,3 +250,7 @@ MOI.get(m::Optimizer, ::MOI.VariablePrimal, v::MOI.VariableIndex) =
     m.solution.values[v.value]
 
 MOI.get(m::Optimizer, ::MOI.NodeCount) = m.solution.nodes
+
+MOI.get(m::Optimizer, ::MOI.ObjectiveBound) = m.solution.rnode_bound
+
+MOI.get(m::Optimizer, ::MOI.RelativeGap) = m.solution.gap
