@@ -14,6 +14,21 @@ mutable struct _Solution
     cpu_time::Float64
 end
 
+function Base.:(==)(x::_Solution, y::_Solution)
+    return x.input_file == y.input_file &&
+           x.output_file == y.output_file &&
+           x.param_file == y.param_file &&
+           x.nodes == y.nodes &&
+           x.rnode_bound == y.rnode_bound &&
+           x.infeasible == y.infeasible &&
+           x.obj_value == y.obj_value &&
+           x.gap == y.gap &&
+           x.variables == y.variables &&
+           x.values == y.values &&
+           x.cpu_time == y.cpu_time
+end
+
+
 mutable struct Optimizer <: MOI.AbstractOptimizer
     # Optimizer attributes
     # AbsPaths to solver binary and parameter file
@@ -35,10 +50,10 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
             m.paramfile = tempname()
             write(m.paramfile, "")
         end
-	@assert isfile(m.paramfile)
-	params = read(m.paramfile, String)
-	rm = match(r"^time_limit\s*=\s*(?<limit>(?:\d+|\d+\.\d+))", params)
-	m.timelimit = (rm !== nothing) ? parse(Float64, rm[:limit]) : nothing
+        @assert isfile(m.paramfile)
+        params = read(m.paramfile, String)
+        tl_match = match(r"^\s*time_limit\s*=\s*(?<limit>(?:\d+\.\d+|\d+))"m, params)
+        m.timelimit = (tl_match !== nothing) ? parse(Float64, tl_match[:limit]) : nothing
         return m
     end
 
@@ -86,12 +101,12 @@ MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.timelimit
 function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
     model.timelimit = limit
     params = read(model.paramfile, String)
-    re = r"^time_limit\s*=\s*\d+\.?\d*.*\n?"m
+    re = r"^\s*time_limit\s*=\s*\d+\.?\d*.*$"m
 
     if isnothing(limit)
         new_params = replace(params, re => "")
     else
-        replacement = "time_limit = $limit\n"
+        replacement = "time_limit = $limit"
         new_params = replace(params, re => replacement)
         if new_params == params
             prefix = (isempty(params) || endswith(params, '\n')) ? "" : "\n"
@@ -121,12 +136,7 @@ function MOI.supports_constraint(
     return true
 end
 
-function _solve(bq_exe::String, bq_params::String, bcfile::String)
-    @assert isfile(bq_exe)
-    @assert isfile(bq_params)
-    @assert isfile(bcfile)
-
-    output = read(`$bq_exe $bcfile $bq_params`, String)
+function _parse_solver_output(output::String)
     re = r"""
     Output\ file:\s*(?<output_file>.*)\n
     Input\ file:\s*(?<input_file>.*)\n
@@ -146,7 +156,7 @@ function _solve(bq_exe::String, bq_params::String, bcfile::String)
         # Branch 3: Early Stop
         Best\ value\ =\ (?<best_value>-?\d+|inf)\n
         (?:Current\ bound\ =\ -?\d+\.\d+\n)?
-        Gap\ =\ (?<gap>\d+\.\d+)
+        Gap\ =\ (?<gap>\d+\.\d+)%
     )
     \n\s*CPU\ time\ =\ (?<cpu_time>\d+\.\d+)\ s
     """x
@@ -166,9 +176,20 @@ function _solve(bq_exe::String, bq_params::String, bcfile::String)
             Dict(),
             parse(Float64, m["cpu_time"]),
         )
+        return results
     else
         error("Regex matching failed on solver log output")
     end
+
+end
+
+function _solve(bq_exe::String, bq_params::String, bcfile::String)
+    @assert isfile(bq_exe)
+    @assert isfile(bq_params)
+    @assert isfile(bcfile)
+
+    output = read(`$bq_exe $bcfile $bq_params`, String)
+    results = _parse_solver_output(output)
 
     return results, output
 
@@ -205,8 +226,10 @@ function MOI.get(m::Optimizer, ::MOI.TerminationStatus)
         return MOI.INFEASIBLE
     elseif m.solution.gap == 0.0
         return MOI.OPTIMAL
+    elseif m.solution.gap != 0.0 && m.timelimit != nothing
+        return MOI.TIME_LIMIT
     else
-        return MOI.OTHER_LIMIT
+        return MOI.OTHER_ERROR
     end
 end
 
