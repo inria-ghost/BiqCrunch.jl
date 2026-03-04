@@ -92,8 +92,6 @@ MOI.get(model::Optimizer, ::MOI.Name) = model.name
 
 MOI.set(model::Optimizer, ::MOI.Name, name::String) = (model.name = name)
 
-MOI.supports(::Optimizer, ::MOI.Silent) = false
-
 MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
 
 MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.timelimit
@@ -118,6 +116,15 @@ function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real
 
     return
 end
+
+MOI.supports(::Optimizer, ::MOI.Silent) = false
+MOI.supports(::Optimizer, ::MOI.ObjectiveLimit) = false
+MOI.supports(::Optimizer, ::MOI.SolutionLimit) = false
+MOI.supports(::Optimizer, ::MOI.NodeLimit) = false
+MOI.supports(::Optimizer, ::MOI.RawOptimizerAttribute) = false
+MOI.supports(::Optimizer, ::MOI.NumberOfThreads) = false
+MOI.supports(::Optimizer, ::MOI.AbsoluteGapTolerance) = false
+MOI.supports(::Optimizer, ::MOI.RelativeGapTolerance) = false
 
 # NOTE: should I add MOI.LessThan,MOI.GreatherThan,MOI.EqualTo ?
 function MOI.supports_constraint(
