@@ -22,45 +22,63 @@ function getijval(F, f, n, m, index_map)
 end
 
 function model2bc(model::MOI.ModelLike, bcfile::String)
-    output = ""
+    obj_func = nothing
+    obj_sense = nothing
+    model_attrs = MOI.get(model, MOI.ListOfModelAttributesSet())
+    for attr in model_attrs
+        if attr == MOI.ObjectiveSense()
+            obj_sense = MOI.get(model, MOI.ObjectiveSense())
+        elseif attr == MOI.Name()
+            continue
+        elseif attr isa MOI.ObjectiveFunction
+            obj_func = attr
+        else
+            throw(MOI.UnsupportedAttribute(attr))
+        end
+    end
 
-    # Output variable names
+    var_attrs = MOI.get(model, MOI.ListOfVariableAttributesSet())
+    for attr in var_attrs
+        if attr != MOI.VariableName()
+            throw(MOI.UnsupportedAttribute(attr))
+        end
+    end
     index_map = MOI.IndexMap()
     vars = MOI.get(model, MOI.ListOfVariableIndices())
     i = 1
     for var in vars
         index_map[var] = MOI.VariableIndex(i)
         i += 1
-        ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.ZeroOne}(var.value)
-        @assert MOI.is_valid(model, ci)
+        # ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.ZeroOne}(var.value)
+        # @assert MOI.is_valid(model, ci)
     end
     n = length(vars)
-    var_strings =
-        map(v -> "#\t$(index_map[v].value): $(MOI.get(model, MOI.VariableName(), v))", vars)
-    output *= "# List of binary variables:\n$(join(var_strings, "\n"))\n"
 
-    # Output max/min
-    obj_sense = MOI.get(model, MOI.ObjectiveSense())
-    if obj_sense == MOI.MIN_SENSE
-        output *= "-1 = min problem\n"
-    elseif obj_sense == MOI.MAX_SENSE
-        output *= "1 = max problem\n"
-    else
-        error("feasibility sense not allowed")
-    end
-
-    # Handle constraints
     rhs = [];
     Q = "";
-    obj_fun_type = MOI.get(model, MOI.ObjectiveFunctionType())
-    obj_fun = MOI.get(model, MOI.ObjectiveFunction{obj_fun_type}())
-    Q *= getijval(obj_fun_type, obj_fun, n, 0, index_map)
+    if obj_sense == MOI.MIN_SENSE || obj_sense == MOI.MAX_SENSE
+        obj_fun_type = MOI.get(model, MOI.ObjectiveFunctionType())
+        obj_fun = MOI.get(model, MOI.ObjectiveFunction{obj_fun_type}())
+        Q *= getijval(obj_fun_type, obj_fun, n, 0, index_map)
+    else
+        obj_fun = MOI.ScalarAffineFunction{Float64}(
+            [MOI.ScalarAffineTerm(0, MOI.VariableIndex(1))],
+            0,
+        )
+        Q *= getijval(MOI.ScalarAffineFunction{Float64}, obj_fun, n, 0, index_map)
+    end
     mi = me = 0
     constraint_types = filter(
         x -> x[1] != MOI.VariableIndex,
         MOI.get(model, MOI.ListOfConstraintTypesPresent()),
     )
     for (F, S) in constraint_types
+        cons_attrs = MOI.get(model, MOI.ListOfConstraintAttributesSet{F,S}())
+        for attr in cons_attrs
+            if attr != MOI.ConstraintName()
+                throw(MOI.UnsupportedAttribute(attr))
+            end
+        end
         cis = MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         for ci in cis
             if S == MOI.EqualTo{Float64}
@@ -80,6 +98,12 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
         end
     end
 
+    output = ""
+    if obj_sense == MOI.MIN_SENSE
+        output *= "-1 = min problem\n"
+    else
+        output *= "1 = max problem\n"
+    end
     output *= "$(mi + me) = number of constraints\n"
     output *= "$(mi == 0 ? 1 : 2) = number of blocks\n"
     output *= "$(n+1)$(mi > 0 ? ", -$mi" : "")\n"

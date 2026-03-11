@@ -35,70 +35,88 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     bin::String
     paramfile::String
 
-    # Model attributes
+    # model attributes
     name::String
     bcfile::String
-    solution::_Solution
+    solution::Union{Nothing,_Solution}
     raw_output_string::String
     timelimit::Union{Nothing,Real}
+    silent::Bool
 
-    function Optimizer(bin::String, paramfile::String = "")
+    function Optimizer(bin::String = "", paramfile::String = "")
         m = new()
         m.bin = bin
+        if m.bin == ""
+            m.bin = expanduser("~/BiqCrunch/problems/generic/biqcrunch")
+        end
         m.paramfile = paramfile
         if m.paramfile == ""
             m.paramfile = tempname()
             write(m.paramfile, "")
         end
-        @assert isfile(m.paramfile)
-        params = read(m.paramfile, String)
-        tl_match = match(r"^\s*time_limit\s*=\s*(?<limit>(?:\d+\.\d+|\d+))"m, params)
-        m.timelimit = (tl_match !== nothing) ? parse(Float64, tl_match[:limit]) : nothing
+
+        _parse_params(m)
+
+        m.name = ""
+        m.bcfile = ""
+        m.solution = nothing
+        m.raw_output_string = ""
+        m.silent = true
         return m
     end
 
 end
 
-function MOI.empty!(model::Optimizer)
-    model.name = ""
-    model.bcfile = ""
-    model.raw_output_string = ""
-    empty!(model.solution)
+function _parse_params(m::Optimizer)
+    @assert isfile(m.paramfile)
+    params = read(m.paramfile, String)
+    tl_match = match(r"^\s*time_limit\s*=\s*(?<limit>(?:\d+\.\d+|\d+))"m, params)
+    m.timelimit = (tl_match !== nothing) ? parse(Float64, tl_match[:limit]) : nothing
 end
 
-function MOI.is_empty(model::Optimizer)
-    return isempty(model.name) &&
-           isempty(model.bcfile) &&
-           isempty(model.raw_output_string) &&
-           isempty(model.solution)
+function MOI.empty!(m::Optimizer)
+    m.name = ""
+    m.bcfile = ""
+    m.raw_output_string = ""
+    m.solution = nothing
+    m.silent = true
+
+
+    m.paramfile = tempname()
+    write(m.paramfile, "")
+    _parse_params(m)
 end
 
-function Base.summary(io::IO, model::Optimizer)
-    return print(
-        io,
-        "BiqCrunch with binary $(model.bin) and parameter file $(model.paramfile)",
-    )
+function MOI.is_empty(m::Optimizer)
+    return isempty(m.name) &&
+           isempty(m.bcfile) &&
+           isempty(m.raw_output_string) &&
+           m.solution == nothing
+end
+
+function Base.summary(io::IO, m::Optimizer)
+    return print(io, "BiqCrunch with binary $(m.bin) and parameter file $(m.paramfile)")
 end
 
 MOI.get(::Optimizer, ::MOI.SolverName) = "BiqCrunch"
 
 MOI.get(::Optimizer, ::MOI.SolverVersion) = "v2.0.0"
 
-MOI.get(model::Optimizer, ::MOI.RawSolver) = model
+MOI.get(m::Optimizer, ::MOI.RawSolver) = m
 
 MOI.supports(::Optimizer, ::MOI.Name) = true
 
-MOI.get(model::Optimizer, ::MOI.Name) = model.name
+MOI.get(m::Optimizer, ::MOI.Name) = m.name
 
-MOI.set(model::Optimizer, ::MOI.Name, name::String) = (model.name = name)
+MOI.set(m::Optimizer, ::MOI.Name, name::String) = (m.name = name)
 
 MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
 
-MOI.get(model::Optimizer, ::MOI.TimeLimitSec) = model.timelimit
+MOI.get(m::Optimizer, ::MOI.TimeLimitSec) = m.timelimit
 
-function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
-    model.timelimit = limit
-    params = read(model.paramfile, String)
+function MOI.set(m::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
+    m.timelimit = limit
+    params = read(m.paramfile, String)
     re = r"^\s*time_limit\s*=\s*\d+\.?\d*.*$"m
 
     if isnothing(limit)
@@ -112,7 +130,7 @@ function MOI.set(model::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real
         end
     end
 
-    write(model.paramfile, new_params)
+    write(m.paramfile, new_params)
 
     return
 end
@@ -126,7 +144,6 @@ MOI.supports(::Optimizer, ::MOI.NumberOfThreads) = false
 MOI.supports(::Optimizer, ::MOI.AbsoluteGapTolerance) = false
 MOI.supports(::Optimizer, ::MOI.RelativeGapTolerance) = false
 
-# NOTE: should I add MOI.LessThan,MOI.GreatherThan,MOI.EqualTo ?
 function MOI.supports_constraint(
     ::Optimizer,
     ::Type{MOI.VariableIndex},
@@ -138,7 +155,7 @@ end
 function MOI.supports_constraint(
     ::Optimizer,
     ::Type{<:Union{MOI.VariableIndex,MOI.ScalarAffineFunction,MOI.ScalarQuadraticFunction}},
-    ::Type{<:Union{MOI.LessThan,MOI.GreaterThan,MOI.EqualTo}},
+    ::Type{<:Union{MOI.LessThan{Float64},MOI.GreaterThan{Float64},MOI.EqualTo{Float64}}},
 )
     return true
 end
@@ -202,14 +219,13 @@ function _solve(bq_exe::String, bq_params::String, bcfile::String)
 
 end
 
-function MOI.optimize!(model::Optimizer, src::MOI.ModelLike)
-    model.bcfile = tempname()
-    index_map = model2bc(src, model.bcfile)
-    model.solution, model.raw_output_string =
-        _solve(model.bin, model.paramfile, model.bcfile)
-    n = MOI.get(src, MOI.NumberOfVariables())
-    (x -> model.solution.values[x] = 0).(1:n)
-    (x -> model.solution.values[x] = 1).(model.solution.variables)
+function MOI.optimize!(m::Optimizer, src::MOI.ModelLike)
+    m.bcfile = tempname()
+    index_map = model2bc(src, m.bcfile)
+    m.solution, m.raw_output_string = _solve(m.bin, m.paramfile, m.bcfile)
+    n = length(index_map) # MOI.get(src, MOI.NumberOfVariables())
+    (x -> m.solution.values[x] = 0).(1:n)
+    (x -> m.solution.values[x] = 1).(m.solution.variables)
 
     return index_map, false
 end
