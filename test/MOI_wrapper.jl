@@ -90,7 +90,6 @@ function test_SolverName()
     return
 end
 
-
 function test_TimeLimitSec()
     paramfile = tempname()
     write(paramfile, "")
@@ -151,6 +150,71 @@ function test_TimeLimitSec()
     """
     @test new_params == expected_params
     @test MOI.get(model, MOI.TimeLimitSec()) == nothing
+end
+
+
+function test_NodeLimit()
+    paramfile = tempname()
+    write(paramfile, "")
+    model = BiqCrunch.Optimizer("", paramfile)
+    @test MOI.get(model, MOI.NodeLimit()) == nothing
+
+    MOI.set(model, MOI.NodeLimit(), 5)
+    @test MOI.get(model, MOI.NodeLimit()) == 5
+
+    new_params = read(model.paramfile, String)
+    expected_params = "node_limit = 5"
+    @test new_params == expected_params
+
+    params = """
+    # this is a comment
+    seed = 1234
+    time_limit = 1.5
+    node_limit = 2
+    maxNiter = 100
+    """
+    write(paramfile, params)
+    model = BiqCrunch.Optimizer("", paramfile)
+    @test MOI.get(model, MOI.NodeLimit()) == 2
+    MOI.set(model, MOI.NodeLimit(), 3)
+    new_params = read(model.paramfile, String)
+    expected_params = """
+    # this is a comment
+    seed = 1234
+    time_limit = 1.5
+    node_limit = 3
+    maxNiter = 100
+    """
+    @test new_params == expected_params
+
+    params = """
+    # this is a comment
+    seed = 1234
+    # node_limit = 1
+    maxNiter = 100
+    """
+    write(paramfile, params)
+    model = BiqCrunch.Optimizer("", paramfile)
+    @test MOI.get(model, MOI.NodeLimit()) == nothing
+    MOI.set(model, MOI.NodeLimit(), 2)
+    new_params = read(model.paramfile, String)
+    expected_params = """
+    # this is a comment
+    seed = 1234
+    # node_limit = 1
+    maxNiter = 100
+    node_limit = 2"""
+    @test new_params == expected_params
+    MOI.set(model, MOI.NodeLimit(), nothing)
+    new_params = read(model.paramfile, String)
+    expected_params = """
+    # this is a comment
+    seed = 1234
+    # node_limit = 1
+    maxNiter = 100
+    """
+    @test new_params == expected_params
+    @test MOI.get(model, MOI.NodeLimit()) == nothing
 end
 
 function test_parse_solver_output()

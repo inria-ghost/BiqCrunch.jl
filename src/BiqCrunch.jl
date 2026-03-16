@@ -60,12 +60,6 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
         obj_fun_type = MOI.get(model, MOI.ObjectiveFunctionType())
         obj_fun = MOI.get(model, MOI.ObjectiveFunction{obj_fun_type}())
         Q *= getijval(obj_fun_type, obj_fun, n, 0, index_map)
-    else
-        obj_fun = MOI.ScalarAffineFunction{Float64}(
-            [MOI.ScalarAffineTerm(0, MOI.VariableIndex(1))],
-            0,
-        )
-        Q *= getijval(MOI.ScalarAffineFunction{Float64}, obj_fun, n, 0, index_map)
     end
     mi = me = 0
     constraint_types = filter(

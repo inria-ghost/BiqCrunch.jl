@@ -41,6 +41,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     solution::Union{Nothing,_Solution}
     raw_output_string::String
     timelimit::Union{Nothing,Real}
+    nodelimit::Union{Nothing,Int}
     silent::Bool
 
     function Optimizer(bin::String = "", paramfile::String = "")
@@ -67,11 +68,17 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
 
 end
 
+function _parse_param(param, param_t, params_string)
+    pattern = Regex("^\\s*$param\\s*=\\s*(?<value>(?:\\d+\\.\\d+|\\d+))", "m")
+    r_match = match(pattern, params_string)
+    return (r_match !== nothing) ? parse(param_t, r_match[:value]) : nothing
+end
+
 function _parse_params(m::Optimizer)
     @assert isfile(m.paramfile)
     params = read(m.paramfile, String)
-    tl_match = match(r"^\s*time_limit\s*=\s*(?<limit>(?:\d+\.\d+|\d+))"m, params)
-    m.timelimit = (tl_match !== nothing) ? parse(Float64, tl_match[:limit]) : nothing
+    m.timelimit = _parse_param("time_limit", Float64, params)
+    m.nodelimit = _parse_param("node_limit", Int, params)
 end
 
 function MOI.empty!(m::Optimizer)
@@ -110,19 +117,14 @@ MOI.get(m::Optimizer, ::MOI.Name) = m.name
 
 MOI.set(m::Optimizer, ::MOI.Name, name::String) = (m.name = name)
 
-MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
-
-MOI.get(m::Optimizer, ::MOI.TimeLimitSec) = m.timelimit
-
-function MOI.set(m::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
-    m.timelimit = limit
+function _set_param(m::Optimizer, param, value)
     params = read(m.paramfile, String)
-    re = r"^\s*time_limit\s*=\s*\d+\.?\d*.*$"m
+    re = Regex("^\\s*$param\\s*=\\s*\\d+\\.?\\d*.*\$", "m")
 
-    if isnothing(limit)
+    if isnothing(value)
         new_params = replace(params, re => "")
     else
-        replacement = "time_limit = $limit"
+        replacement = "$param = $value"
         new_params = replace(params, re => replacement)
         if new_params == params
             prefix = (isempty(params) || endswith(params, '\n')) ? "" : "\n"
@@ -131,14 +133,31 @@ function MOI.set(m::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
     end
 
     write(m.paramfile, new_params)
+end
 
+MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
+
+MOI.get(m::Optimizer, ::MOI.TimeLimitSec) = m.timelimit
+
+function MOI.set(m::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
+    m.timelimit = limit
+    _set_param(m, "time_limit", limit)
+    return
+end
+
+MOI.supports(::Optimizer, ::MOI.NodeLimit) = true
+
+MOI.get(m::Optimizer, ::MOI.NodeLimit) = m.nodelimit
+
+function MOI.set(m::Optimizer, ::MOI.NodeLimit, limit::Union{Nothing,Int})
+    m.nodelimit = limit
+    _set_param(m, "node_limit", limit)
     return
 end
 
 MOI.supports(::Optimizer, ::MOI.Silent) = false
 MOI.supports(::Optimizer, ::MOI.ObjectiveLimit) = false
 MOI.supports(::Optimizer, ::MOI.SolutionLimit) = false
-MOI.supports(::Optimizer, ::MOI.NodeLimit) = false
 MOI.supports(::Optimizer, ::MOI.RawOptimizerAttribute) = false
 MOI.supports(::Optimizer, ::MOI.NumberOfThreads) = false
 MOI.supports(::Optimizer, ::MOI.AbsoluteGapTolerance) = false
