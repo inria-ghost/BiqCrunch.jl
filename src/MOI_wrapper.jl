@@ -28,6 +28,8 @@ function Base.:(==)(x::_Solution, y::_Solution)
            x.cpu_time == y.cpu_time
 end
 
+struct SolverBinary <: MOI.AbstractOptimizerAttribute end
+struct ParameterFile <: MOI.AbstractOptimizerAttribute end
 
 mutable struct Optimizer <: MOI.AbstractOptimizer
     # Optimizer attributes
@@ -289,3 +291,23 @@ MOI.get(m::Optimizer, ::MOI.NodeCount) = m.solution.nodes
 MOI.get(m::Optimizer, ::MOI.ObjectiveBound) = m.solution.rnode_bound
 
 MOI.get(m::Optimizer, ::MOI.RelativeGap) = m.solution.gap
+
+# Solver-specific attributes
+function MOI.set(m::Optimizer, ::SolverBinary, bin::String)
+    m.bin = bin
+    return
+end
+
+function MOI.get(model::Optimizer, ::SolverBinary)
+    return m.bin
+end
+
+function MOI.set(m::Optimizer, ::ParameterFile, file::String)
+    m.paramfile = file
+    _parse_params(m)
+    return
+end
+
+function MOI.get(model::Optimizer, ::ParameterFile)
+    return m.paramfile
+end
