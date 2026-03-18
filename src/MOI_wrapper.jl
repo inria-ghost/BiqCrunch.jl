@@ -45,7 +45,6 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     timelimit::Union{Nothing,Real}
     nodelimit::Union{Nothing,Int}
     relgaptol::Union{Nothing,Float64}
-    silent::Bool
 
     function Optimizer(bin::String = "", paramfile::String = "")
         m = new()
@@ -65,7 +64,6 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
         m.bcfile = ""
         m.solution = nothing
         m.raw_output_string = ""
-        m.silent = true
         return m
     end
 
@@ -90,9 +88,6 @@ function MOI.empty!(m::Optimizer)
     m.bcfile = ""
     m.raw_output_string = ""
     m.solution = nothing
-    m.silent = true
-
-
     m.paramfile = tempname()
     write(m.paramfile, "")
     _parse_params(m)
