@@ -44,6 +44,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     raw_output_string::String
     timelimit::Union{Nothing,Real}
     nodelimit::Union{Nothing,Int}
+    relgaptol::Union{Nothing,Float64}
     silent::Bool
 
     function Optimizer(bin::String = "", paramfile::String = "")
@@ -81,6 +82,7 @@ function _parse_params(m::Optimizer)
     params = read(m.paramfile, String)
     m.timelimit = _parse_param("time_limit", Float64, params)
     m.nodelimit = _parse_param("node_limit", Int, params)
+    m.relgaptol = _parse_param("relative_gap_tol", Float64, params)
 end
 
 function MOI.empty!(m::Optimizer)
@@ -157,13 +159,22 @@ function MOI.set(m::Optimizer, ::MOI.NodeLimit, limit::Union{Nothing,Int})
     return
 end
 
+MOI.supports(::Optimizer, ::MOI.RelativeGapTolerance) = true
+
+MOI.get(m::Optimizer, ::MOI.RelativeGapTolerance) = m.relgaptol
+
+function MOI.set(m::Optimizer, ::MOI.RelativeGapTolerance, limit::Union{Nothing,Float64})
+    m.relgaptol = limit
+    _set_param(m, "relative_gap_tol", limit)
+    return
+end
+
 MOI.supports(::Optimizer, ::MOI.Silent) = false
 MOI.supports(::Optimizer, ::MOI.ObjectiveLimit) = false
 MOI.supports(::Optimizer, ::MOI.SolutionLimit) = false
 MOI.supports(::Optimizer, ::MOI.RawOptimizerAttribute) = false
 MOI.supports(::Optimizer, ::MOI.NumberOfThreads) = false
 MOI.supports(::Optimizer, ::MOI.AbsoluteGapTolerance) = false
-MOI.supports(::Optimizer, ::MOI.RelativeGapTolerance) = false
 
 function MOI.supports_constraint(
     ::Optimizer,
@@ -270,8 +281,12 @@ function MOI.get(m::Optimizer, ::MOI.TerminationStatus)
         return MOI.INFEASIBLE
     elseif m.solution.gap == 0.0
         return MOI.OPTIMAL
-    elseif m.solution.gap != 0.0 && m.timelimit != nothing
+    elseif m.solution.gap != 0.0 && m.solution.cpu_time >= something(m.timelimit, Inf)
         return MOI.TIME_LIMIT
+    elseif m.solution.gap != 0.0 && m.solution.nodes >= something(m.nodelimit, Inf)
+        return MOI.NODE_LIMIT
+    elseif m.solution.gap != 0.0 && m.solution.gap < something(m.relgaptol, 0.0)
+        return MOI.ALMOST_OPTIMAL
     else
         return MOI.OTHER_ERROR
     end
