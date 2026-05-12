@@ -21,7 +21,7 @@ function getijval(F, f, n, m, index_map)
     return q
 end
 
-function model2bc(model::MOI.ModelLike, bcfile::String)
+function model2bc(model::MOI.ModelLike)
     obj_func = nothing
     obj_sense = nothing
     model_attrs = MOI.get(model, MOI.ListOfModelAttributesSet())
@@ -104,8 +104,7 @@ function model2bc(model::MOI.ModelLike, bcfile::String)
     output *= "$(join(rhs, " "))\n"
     output *= Q
 
-    write(bcfile, output)
-    return index_map
+    return index_map, output
 end
 
 

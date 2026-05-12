@@ -3,47 +3,61 @@ import MathOptInterface as MOI
 
 using Test
 
+function get_sample_model()
+    src = MOI.Utilities.Model{Float64}()
+
+    x = MOI.add_variables(src, 3)
+    MOI.add_constraint(
+        src,
+        MOI.ScalarAffineFunction(
+            [MOI.ScalarAffineTerm(1.0, x[1]), MOI.ScalarAffineTerm(1.0, x[2])],
+            0.0,
+        ),
+        MOI.LessThan(1.0),
+    )
+    MOI.add_constraint(
+        src,
+        MOI.ScalarAffineFunction(
+            [MOI.ScalarAffineTerm(1.0, x[2]), MOI.ScalarAffineTerm(1.0, x[3])],
+            0.0,
+        ),
+        MOI.LessThan(1.0),
+    )
+    MOI.add_constraint(src, x[1], MOI.ZeroOne())
+    MOI.add_constraint(src, x[2], MOI.ZeroOne())
+    MOI.add_constraint(src, x[3], MOI.ZeroOne())
+
+    obj_fun = MOI.ScalarAffineFunction(
+        [
+            MOI.ScalarAffineTerm(1.0, x[3]),
+            MOI.ScalarAffineTerm(1.0, x[1]),
+            MOI.ScalarAffineTerm(1.0, x[2]),
+        ],
+        0.0,
+    )
+    MOI.set(src, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), obj_fun)
+    MOI.set(src, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    return src
+end
+
 @testset "MOI" begin
     include("MOI_wrapper.jl")
 end
 
-# NOTE: BiqCrunch.jl
-@testset "model2bc" begin
+@testset "e2e" begin
+    src = get_sample_model()
+    model = BiqCrunch.Optimizer()
 
-    function lp2bcpy(lp_file::String, bc_file::String)
-        script_path = expanduser("~/BiqCrunch/tools/lp2bc.py")
-        run(pipeline(`python3 $script_path $lp_file`, bc_file))
-    end
-    #
-    # TODO: add tests for bcfile generation
+    index, _ = MOI.optimize!(model, src)
+    @test MOI.get(model, MOI.TerminationStatus()) == MOI.OPTIMAL
+    @test MOI.get(model, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
+    @test MOI.get(model, MOI.ObjectiveValue()) == 2
+
+    obj_values = map(
+        v -> MOI.get(model, MOI.VariablePrimal(), index[v]),
+        MOI.get(src, MOI.ListOfVariableIndices()),
+    )
+    @test obj_values == [1, 0, 1]
+    @test MOI.get(model, MOI.NodeCount()) == 1
 
 end;
-
-@testset "e2e" begin
-    # NOTE: Assumes BiqCrunch is installed in the home directory
-
-    # TODO: add tests for feasibility problems
-    bq_exe = expanduser("~/BiqCrunch/problems/generic/biqcrunch")
-    problems = [
-        expanduser("~/BiqCrunch/problems/generic/example.lp"),
-        expanduser("~/BiqCrunch/problems/generic/examples/randprob.lp"),
-    ]
-
-    for p in problems
-        println(p)
-        model = BiqCrunch.Optimizer(bq_exe)
-        println(summary(model))
-        MOI.set(model, MOI.TimeLimitSec(), 1)
-        src = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_LP)
-        MOI.read_from_file(src, p)
-        index, _ = MOI.optimize!(model, src)
-        println(MOI.get(model, MOI.TerminationStatus()))
-        println(MOI.get(model, MOI.PrimalStatus()))
-        println(MOI.get(model, MOI.ObjectiveValue()))
-        for var in MOI.get(src, MOI.ListOfVariableIndices())
-            println("$var  =>  $(MOI.get(model, MOI.VariablePrimal(), index[var]))")
-        end
-        println(MOI.get(model, MOI.SolveTimeSec()))
-        println(MOI.get(model, MOI.NodeCount()))
-    end
-end

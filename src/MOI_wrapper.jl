@@ -1,4 +1,5 @@
 import MathOptInterface as MOI
+import BiqCrunch_jll
 
 mutable struct _Solution
     input_file::String
@@ -34,7 +35,7 @@ struct ParameterFile <: MOI.AbstractOptimizerAttribute end
 mutable struct Optimizer <: MOI.AbstractOptimizer
     # Optimizer attributes
     # AbsPaths to solver binary and parameter file
-    bin::String
+    bin::Function
     paramfile::String
 
     # model attributes
@@ -48,9 +49,10 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
 
     function Optimizer(bin::String = "", paramfile::String = "")
         m = new()
-        m.bin = bin
-        if m.bin == ""
-            m.bin = expanduser("~/BiqCrunch/problems/generic/biqcrunch")
+        if bin == ""
+            m.bin = BiqCrunch_jll.generic_bq
+        else
+            m.bin = () -> Cmd(`$bin`)
         end
         m.paramfile = paramfile
         if m.paramfile == ""
@@ -234,12 +236,11 @@ function _parse_solver_output(output::String)
 
 end
 
-function _solve(bq_exe::String, bq_params::String, bcfile::String)
-    @assert isfile(bq_exe)
+function _solve(bq_exe::Function, bq_params::String, bcfile::String)
     @assert isfile(bq_params)
     @assert isfile(bcfile)
 
-    output = read(`$bq_exe $bcfile $bq_params`, String)
+    output = read(`$(bq_exe()) $bcfile $bq_params`, String)
     results = _parse_solver_output(output)
 
     return results, output
@@ -248,7 +249,8 @@ end
 
 function MOI.optimize!(m::Optimizer, src::MOI.ModelLike)
     m.bcfile = tempname()
-    index_map = model2bc(src, m.bcfile)
+    index_map, bcmodel = model2bc(src)
+    write(m.bcfile, bcmodel)
     m.solution, m.raw_output_string = _solve(m.bin, m.paramfile, m.bcfile)
     n = length(index_map) # MOI.get(src, MOI.NumberOfVariables())
     (x -> m.solution.values[x] = 0).(1:n)
@@ -304,7 +306,7 @@ MOI.get(m::Optimizer, ::MOI.RelativeGap) = m.solution.gap
 
 # Solver-specific attributes
 function MOI.set(m::Optimizer, ::SolverBinary, bin::String)
-    m.bin = bin
+    m.bin = Cmd(`$bin`)
     return
 end
 

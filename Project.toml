@@ -3,11 +3,12 @@ uuid = "579a2c09-967a-4d10-82f0-b0fdaa4996f2"
 version = "0.1.0"
 authors = ["Gustavo Prolla Lacroix <gustavo.prolla-lacroix@grenoble-inp.org>"]
 
+[workspace]
+projects = ["test"]
+
 [deps]
+BiqCrunch_jll = "3dcdc8e4-44ed-57ba-a481-00c2d470a1e6"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 
 [compat]
 MathOptInterface = "1.49.0"
-
-[workspace]
-projects = ["test"]
