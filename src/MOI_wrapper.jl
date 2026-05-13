@@ -43,9 +43,36 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     bcfile::String
     solution::Union{Nothing,_Solution}
     raw_output_string::String
-    timelimit::Union{Nothing,Real}
-    nodelimit::Union{Nothing,Int}
-    relgaptol::Union{Nothing,Float64}
+    time_limit::Union{Nothing,Real}
+    node_limit::Union{Nothing,Int}
+    relative_gap_tol::Union{Nothing,Float64}
+
+    # BiqCrunch parameters
+    alpha0::Union{Nothing,Float64}
+    scaleAlpha::Union{Nothing,Float64}
+    minAlpha::Union{Nothing,Float64}
+    tol0::Union{Nothing,Float64}
+    scaleTol::Union{Nothing,Float64}
+    minTol::Union{Nothing,Float64}
+    withCuts::Union{Nothing,Int}
+    gapCuts::Union{Nothing,Float64}
+    cuts::Union{Nothing,Int}
+    minCuts::Union{Nothing,Int}
+    nitermax::Union{Nothing,Int}
+    minNiter::Union{Nothing,Int}
+    maxNiter::Union{Nothing,Int}
+    scaling::Union{Nothing,Int}
+    root::Union{Nothing,Int}
+    heur_1::Union{Nothing,Int}
+    heur_2::Union{Nothing,Int}
+    heur_3::Union{Nothing,Int}
+    soln_value_provided::Union{Nothing,Int}
+    soln_value::Union{Nothing,Int}
+    branchingStrategy::Union{Nothing,Int}
+    seed::Union{Nothing,Int}
+    local_search::Union{Nothing,Int}
+    NBGW1::Union{Nothing,Int}
+    NBGW2::Union{Nothing,Int}
 
     function Optimizer(bin::String = "", paramfile::String = "")
         m = new()
@@ -80,9 +107,35 @@ end
 function _parse_params(m::Optimizer)
     @assert isfile(m.paramfile)
     params = read(m.paramfile, String)
-    m.timelimit = _parse_param("time_limit", Float64, params)
-    m.nodelimit = _parse_param("node_limit", Int, params)
-    m.relgaptol = _parse_param("relative_gap_tol", Float64, params)
+    m.time_limit = _parse_param("time_limit", Float64, params)
+    m.node_limit = _parse_param("node_limit", Int, params)
+    m.relative_gap_tol = _parse_param("relative_gap_tol", Float64, params)
+
+    m.alpha0 = _parse_param("alpha0", Float64, params)
+    m.scaleAlpha = _parse_param("scaleAlpha", Float64, params)
+    m.minAlpha = _parse_param("minAlpha", Float64, params)
+    m.tol0 = _parse_param("tol0", Float64, params)
+    m.scaleTol = _parse_param("scaleTol", Float64, params)
+    m.minTol = _parse_param("minTol", Float64, params)
+    m.withCuts = _parse_param("withCuts", Int, params)
+    m.gapCuts = _parse_param("gapCuts", Float64, params)
+    m.cuts = _parse_param("cuts", Int, params)
+    m.minCuts = _parse_param("minCuts", Int, params)
+    m.nitermax = _parse_param("nitermax", Int, params)
+    m.minNiter = _parse_param("minNiter", Int, params)
+    m.maxNiter = _parse_param("maxNiter", Int, params)
+    m.scaling = _parse_param("scaling", Int, params)
+    m.root = _parse_param("root", Int, params)
+    m.heur_1 = _parse_param("heur_1", Int, params)
+    m.heur_2 = _parse_param("heur_2", Int, params)
+    m.heur_3 = _parse_param("heur_3", Int, params)
+    m.soln_value_provided = _parse_param("soln_value_provided", Int, params)
+    m.soln_value = _parse_param("soln_value", Int, params)
+    m.branchingStrategy = _parse_param("branchingStrategy", Int, params)
+    m.seed = _parse_param("seed", Int, params)
+    m.local_search = _parse_param("local_search", Int, params)
+    m.NBGW1 = _parse_param("NBGW1", Int, params)
+    m.NBGW2 = _parse_param("NBGW2", Int, params)
 end
 
 function MOI.empty!(m::Optimizer)
@@ -138,30 +191,30 @@ end
 
 MOI.supports(::Optimizer, ::MOI.TimeLimitSec) = true
 
-MOI.get(m::Optimizer, ::MOI.TimeLimitSec) = m.timelimit
+MOI.get(m::Optimizer, ::MOI.TimeLimitSec) = m.time_limit
 
 function MOI.set(m::Optimizer, ::MOI.TimeLimitSec, limit::Union{Nothing,Real})
-    m.timelimit = limit
+    m.time_limit = limit
     _set_param(m, "time_limit", limit)
     return
 end
 
 MOI.supports(::Optimizer, ::MOI.NodeLimit) = true
 
-MOI.get(m::Optimizer, ::MOI.NodeLimit) = m.nodelimit
+MOI.get(m::Optimizer, ::MOI.NodeLimit) = m.node_limit
 
 function MOI.set(m::Optimizer, ::MOI.NodeLimit, limit::Union{Nothing,Int})
-    m.nodelimit = limit
+    m.node_limit = limit
     _set_param(m, "node_limit", limit)
     return
 end
 
 MOI.supports(::Optimizer, ::MOI.RelativeGapTolerance) = true
 
-MOI.get(m::Optimizer, ::MOI.RelativeGapTolerance) = m.relgaptol
+MOI.get(m::Optimizer, ::MOI.RelativeGapTolerance) = m.relative_gap_tol
 
 function MOI.set(m::Optimizer, ::MOI.RelativeGapTolerance, limit::Union{Nothing,Float64})
-    m.relgaptol = limit
+    m.relative_gap_tol = limit
     _set_param(m, "relative_gap_tol", limit)
     return
 end
@@ -278,11 +331,11 @@ function MOI.get(m::Optimizer, ::MOI.TerminationStatus)
         return MOI.INFEASIBLE
     elseif m.solution.gap == 0.0
         return MOI.OPTIMAL
-    elseif m.solution.gap != 0.0 && m.solution.cpu_time >= something(m.timelimit, Inf)
+    elseif m.solution.gap != 0.0 && m.solution.cpu_time >= something(m.time_limit, Inf)
         return MOI.TIME_LIMIT
-    elseif m.solution.gap != 0.0 && m.solution.nodes >= something(m.nodelimit, Inf)
+    elseif m.solution.gap != 0.0 && m.solution.nodes >= something(m.node_limit, Inf)
         return MOI.NODE_LIMIT
-    elseif m.solution.gap != 0.0 && m.solution.gap < something(m.relgaptol, 0.0)
+    elseif m.solution.gap != 0.0 && m.solution.gap < something(m.relative_gap_tol, 0.0)
         return MOI.ALMOST_OPTIMAL
     else
         return MOI.OTHER_ERROR
@@ -323,3 +376,91 @@ end
 function MOI.get(model::Optimizer, ::ParameterFile)
     return m.paramfile
 end
+
+# BiqCrunch parameters
+struct Alpha0 <: MOI.AbstractOptimizerAttribute end
+struct ScaleAlpha <: MOI.AbstractOptimizerAttribute end
+struct MinAlpha <: MOI.AbstractOptimizerAttribute end
+struct Tol0 <: MOI.AbstractOptimizerAttribute end
+struct ScaleTol <: MOI.AbstractOptimizerAttribute end
+struct MinTol <: MOI.AbstractOptimizerAttribute end
+struct WithCuts <: MOI.AbstractOptimizerAttribute end
+struct GapCuts <: MOI.AbstractOptimizerAttribute end
+struct Cuts <: MOI.AbstractOptimizerAttribute end
+struct MinCuts <: MOI.AbstractOptimizerAttribute end
+struct Nitermax <: MOI.AbstractOptimizerAttribute end
+struct MinNiter <: MOI.AbstractOptimizerAttribute end
+struct MaxNiter <: MOI.AbstractOptimizerAttribute end
+struct Scaling <: MOI.AbstractOptimizerAttribute end
+struct Root <: MOI.AbstractOptimizerAttribute end
+struct Heur_1 <: MOI.AbstractOptimizerAttribute end
+struct Heur_2 <: MOI.AbstractOptimizerAttribute end
+struct Heur_3 <: MOI.AbstractOptimizerAttribute end
+struct Soln_value_provided <: MOI.AbstractOptimizerAttribute end
+struct Soln_value <: MOI.AbstractOptimizerAttribute end
+struct Time_limit <: MOI.AbstractOptimizerAttribute end
+struct BranchingStrategy <: MOI.AbstractOptimizerAttribute end
+struct Seed <: MOI.AbstractOptimizerAttribute end
+struct Local_search <: MOI.AbstractOptimizerAttribute end
+struct NBGW1 <: MOI.AbstractOptimizerAttribute end
+struct NBGW2 <: MOI.AbstractOptimizerAttribute end
+
+macro generate_setter(param, attribute, value_type)
+    return :(function MOI.set(m::Optimizer, $attribute, value::$value_type)
+        setproperty!(m, $param, value)
+        _set_param(m, "$($param)", value)
+    end)
+end
+
+@generate_setter(:alpha0, ::Alpha0, Union{Nothing,Float64})
+@generate_setter(:scaleAlpha, ::ScaleAlpha, Union{Nothing,Float64})
+@generate_setter(:minAlpha, ::MinAlpha, Union{Nothing,Float64})
+@generate_setter(:tol0, ::Tol0, Union{Nothing,Float64})
+@generate_setter(:scaleTol, ::ScaleTol, Union{Nothing,Float64})
+@generate_setter(:minTol, ::MinTol, Union{Nothing,Float64})
+@generate_setter(:withCuts, ::WithCuts, Union{Nothing,Int})
+@generate_setter(:gapCuts, ::GapCuts, Union{Nothing,Float64})
+@generate_setter(:cuts, ::Cuts, Union{Nothing,Int})
+@generate_setter(:minCuts, ::MinCuts, Union{Nothing,Int})
+@generate_setter(:nitermax, ::Nitermax, Union{Nothing,Int})
+@generate_setter(:minNiter, ::MinNiter, Union{Nothing,Int})
+@generate_setter(:maxNiter, ::MaxNiter, Union{Nothing,Int})
+@generate_setter(:scaling, ::Scaling, Union{Nothing,Int})
+@generate_setter(:root, ::Root, Union{Nothing,Int})
+@generate_setter(:heur_1, ::Heur_1, Union{Nothing,Int})
+@generate_setter(:heur_2, ::Heur_2, Union{Nothing,Int})
+@generate_setter(:heur_3, ::Heur_3, Union{Nothing,Int})
+@generate_setter(:soln_value_provided, ::Soln_value_provided, Union{Nothing,Int})
+@generate_setter(:soln_value, ::Soln_value, Union{Nothing,Int})
+@generate_setter(:branchingStrategy, ::BranchingStrategy, Union{Nothing,Int})
+@generate_setter(:seed, ::Seed, Union{Nothing,Int})
+@generate_setter(:local_search, ::Local_search, Union{Nothing,Int})
+@generate_setter(:NBGW1, ::NBGW1, Union{Nothing,Int})
+@generate_setter(:NBGW2, ::NBGW2, Union{Nothing,Int})
+
+MOI.get(m::Optimizer, ::Alpha0) = m.alpha0
+MOI.get(m::Optimizer, ::ScaleAlpha) = m.scaleAlpha
+MOI.get(m::Optimizer, ::MinAlpha) = m.minAlpha
+MOI.get(m::Optimizer, ::Tol0) = m.tol0
+MOI.get(m::Optimizer, ::ScaleTol) = m.scaleTol
+MOI.get(m::Optimizer, ::MinTol) = m.minTol
+MOI.get(m::Optimizer, ::WithCuts) = m.withCuts
+MOI.get(m::Optimizer, ::GapCuts) = m.gapCuts
+MOI.get(m::Optimizer, ::Cuts) = m.cuts
+MOI.get(m::Optimizer, ::MinCuts) = m.minCuts
+MOI.get(m::Optimizer, ::Nitermax) = m.nitermax
+MOI.get(m::Optimizer, ::MinNiter) = m.minNiter
+MOI.get(m::Optimizer, ::MaxNiter) = m.maxNiter
+MOI.get(m::Optimizer, ::Scaling) = m.scaling
+MOI.get(m::Optimizer, ::Root) = m.root
+MOI.get(m::Optimizer, ::Heur_1) = m.heur_1
+MOI.get(m::Optimizer, ::Heur_2) = m.heur_2
+MOI.get(m::Optimizer, ::Heur_3) = m.heur_3
+MOI.get(m::Optimizer, ::Soln_value_provided) = m.soln_value_provided
+MOI.get(m::Optimizer, ::Soln_value) = m.soln_value
+MOI.get(m::Optimizer, ::Time_limit) = m.time_limit
+MOI.get(m::Optimizer, ::BranchingStrategy) = m.branchingStrategy
+MOI.get(m::Optimizer, ::Seed) = m.seed
+MOI.get(m::Optimizer, ::Local_search) = m.local_search
+MOI.get(m::Optimizer, ::NBGW1) = m.NBGW1
+MOI.get(m::Optimizer, ::NBGW2) = m.NBGW2
