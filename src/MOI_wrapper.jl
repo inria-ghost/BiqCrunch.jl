@@ -226,6 +226,17 @@ MOI.supports(::Optimizer, ::MOI.RawOptimizerAttribute) = false
 MOI.supports(::Optimizer, ::MOI.NumberOfThreads) = false
 MOI.supports(::Optimizer, ::MOI.AbsoluteGapTolerance) = false
 
+function MOI.supports(
+    ::Optimizer,
+    ::Union{
+        MOI.ObjectiveSense,
+        MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}},
+        MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{Float64}},
+    },
+)
+    return true
+end
+
 function MOI.supports_constraint(
     ::Optimizer,
     ::Type{MOI.VariableIndex},
@@ -241,6 +252,7 @@ function MOI.supports_constraint(
 )
     return true
 end
+
 
 function _parse_solver_output(output::String)
     re = r"""
@@ -344,7 +356,7 @@ end
 
 MOI.get(::Optimizer, ::MOI.ResultCount) = 1
 
-MOI.get(m::Optimizer, ::MOI.ObjectiveValue) = m.solution.obj_value
+MOI.get(m::Optimizer, ::MOI.ObjectiveValue) = float(m.solution.obj_value)
 
 MOI.get(m::Optimizer, ::MOI.SolveTimeSec) = m.solution.cpu_time
 
@@ -363,7 +375,7 @@ function MOI.set(m::Optimizer, ::SolverBinary, bin::String)
     return
 end
 
-function MOI.get(model::Optimizer, ::SolverBinary)
+function MOI.get(m::Optimizer, ::SolverBinary)
     return m.bin
 end
 
@@ -373,7 +385,7 @@ function MOI.set(m::Optimizer, ::ParameterFile, file::String)
     return
 end
 
-function MOI.get(model::Optimizer, ::ParameterFile)
+function MOI.get(m::Optimizer, ::ParameterFile)
     return m.paramfile
 end
 

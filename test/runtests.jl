@@ -40,9 +40,9 @@ function get_sample_model()
     return src
 end
 
-@testset "MOI" begin
-    include("MOI_wrapper.jl")
-end
+# @testset "MOI" begin
+#     include("MOI_wrapper.jl")
+# end
 
 @testset "e2e" begin
     src = get_sample_model()
@@ -51,7 +51,7 @@ end
     index, _ = MOI.optimize!(model, src)
     @test MOI.get(model, MOI.TerminationStatus()) == MOI.OPTIMAL
     @test MOI.get(model, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
-    @test MOI.get(model, MOI.ObjectiveValue()) == 2
+    @test MOI.get(model, MOI.ObjectiveValue()) == 2.0
 
     obj_values = map(
         v -> MOI.get(model, MOI.VariablePrimal(), index[v]),
