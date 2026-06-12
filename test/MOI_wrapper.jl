@@ -10,20 +10,20 @@ const OPTIMIZER = MOI.instantiate(MOI.OptimizerWithAttributes(BiqCrunch.Optimize
 
 const BRIDGED = MOI.instantiate(
     BiqCrunch.Optimizer,
-    with_cache_type = Float64,
-    with_bridge_type = Float64,
+    with_cache_type=Float64,
+    with_bridge_type=Float64,
 )
 
 # See the docstring of MOI.Test.Config for other arguments.
 const CONFIG = MOI.Test.Config(
     # Modify tolerances as necessary.
-    atol = 1e-6,
-    rtol = 1e-6,
+    atol=1e-6,
+    rtol=1e-6,
     # Use MOI.LOCALLY_SOLVED for local solvers.
-    optimal_status = MOI.OPTIMAL,
+    optimal_status=MOI.OPTIMAL,
     # Pass attributes or MOI functions to `exclude` to skip tests that
     # rely on this functionality.
-    exclude = Any[MOI.ConstraintDual,],
+    exclude=Any[MOI.ConstraintDual,],
 )
 
 """
@@ -32,7 +32,7 @@ const CONFIG = MOI.Test.Config(
 This function runs all functions in the this Module starting with `test_`.
 """
 function runtests()
-    for name in names(@__MODULE__; all = true)
+    for name in names(@__MODULE__; all=true)
         if startswith("$(name)", "test_")
             @testset "$(name)" begin
                 getfield(@__MODULE__, name)()
@@ -53,7 +53,7 @@ function test_runtests()
     MOI.Test.runtests(
         BRIDGED,
         CONFIG,
-        exclude = [
+        exclude=[
             "test_linear_FEASIBILITY_SENSE", # Requires incremental interface
             "test_quadratic_nonconvex_constraint_basic", # Requires incremental interface
             # NOTE: these tests should require incremental interface but do not. 
@@ -74,7 +74,7 @@ function test_runtests()
         # releases of MOI that add new tests. Don't let this number get too far
         # behind the current MOI release though. You should periodically check
         # for new tests to fix bugs and implement new features.
-        exclude_tests_after = v"0.10.5",
+        exclude_tests_after=v"0.10.5",
     )
     return
 end

@@ -6,17 +6,26 @@ function getijval(F, f, n, m, index_map)
     q = ""
     if F == MOI.ScalarAffineFunction{Float64}
         for t in f.terms
+            if !isinteger(t.coefficient)
+                error("BiqCrunch only supports integer coefficients.")
+            end
             q *= "$m 1 $(index_map[t.variable].value) $(n+1) $(t.coefficient/2)\n"
         end
     elseif F == MOI.ScalarQuadraticFunction{Float64}
         for qt in f.quadratic_terms
+            if !isinteger(qt.coefficient)
+                error("BiqCrunch only supports integer coefficients.")
+            end
             q *= "$m 1 $(index_map[qt.variable_1].value) $(index_map[qt.variable_2].value) $(qt.coefficient/2)\n"
         end
         for at in f.affine_terms
+            if !isinteger(at.coefficient)
+                error("BiqCrunch only supports integer coefficients.")
+            end
             q *= "$m 1 $(index_map[at.variable].value) $(n+1) $(at.coefficient/2)\n"
         end
     else
-        error("unsupported function type: $F")
+        error("Unsupported function type: $F")
     end
     return q
 end
@@ -54,8 +63,8 @@ function model2bc(model::MOI.ModelLike)
     end
     n = length(vars)
 
-    rhs = [];
-    Q = "";
+    rhs = []
+    Q = ""
     if obj_sense == MOI.MIN_SENSE || obj_sense == MOI.MAX_SENSE
         obj_fun_type = MOI.get(model, MOI.ObjectiveFunctionType())
         obj_fun = MOI.get(model, MOI.ObjectiveFunction{obj_fun_type}())

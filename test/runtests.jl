@@ -40,9 +40,39 @@ function get_sample_model()
     return src
 end
 
-# @testset "MOI" begin
-#     include("MOI_wrapper.jl")
-# end
+function get_fractional_model()
+    src = MOI.Utilities.Model{Float64}()
+
+    x = MOI.add_variables(src, 3)
+    MOI.add_constraint(
+        src,
+        MOI.ScalarAffineFunction(
+            [MOI.ScalarAffineTerm(1.5, x[1]), MOI.ScalarAffineTerm(1.0, x[2])],
+            0.0,
+        ),
+        MOI.LessThan(1.0),
+    )
+    MOI.add_constraint(src, x[1], MOI.ZeroOne())
+    MOI.add_constraint(src, x[2], MOI.ZeroOne())
+    MOI.add_constraint(src, x[3], MOI.ZeroOne())
+
+    obj_fun = MOI.ScalarAffineFunction(
+        [
+            MOI.ScalarAffineTerm(1.0, x[3]),
+            MOI.ScalarAffineTerm(1.0, x[1]),
+            MOI.ScalarAffineTerm(1.0, x[2]),
+        ],
+        0.0,
+    )
+    MOI.set(src, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), obj_fun)
+    MOI.set(src, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    return src
+end
+
+@testset "MOI" begin
+    include("MOI_wrapper.jl")
+end
+
 
 @testset "e2e" begin
     src = get_sample_model()
@@ -59,5 +89,9 @@ end
     )
     @test obj_values == [1, 0, 1]
     @test MOI.get(model, MOI.NodeCount()) == 1
+
+    src = get_fractional_model()
+    model = BiqCrunch.Optimizer()
+    @test_throws "BiqCrunch only supports integer coefficients." MOI.optimize!(model, src)
 
 end;

@@ -51,8 +51,6 @@ List of supported model attributes:
 * [`MOI.Name`](@ref)
 
 List of supported optimizer attributes:
-* [`BiqCrunch.SolverBinary`](@ref)
-* [`BiqCrunch.ParameterFile`](@ref)
 * [`MOI.SolverName`](@ref)
 * [`MOI.SolverVersion`](@ref)
 * [`MOI.TimeLimitSec`](@ref)
@@ -66,4 +64,43 @@ List of supported optimizer attributes:
 * [`MOI.RelativeGap`](@ref)
 * [`MOI.SolveTimeSec`](@ref)
 * [`MOI.NodeCount`](@ref)
+
+List of supported solver-specific attributes:
+* [`BiqCrunch.SolverBinary`](@ref)
+* [`BiqCrunch.ParameterFile`](@ref)
+* [`BiqCrunch.Alpha0`](@ref)
+* [`BiqCrunch.ScaleAlpha`](@ref)
+* [`BiqCrunch.MinAlpha`](@ref)
+* [`BiqCrunch.Tol0`](@ref)
+* [`BiqCrunch.ScaleTol`](@ref)
+* [`BiqCrunch.MinTol`](@ref)
+* [`BiqCrunch.WithCuts`](@ref)
+* [`BiqCrunch.GapCuts`](@ref)
+* [`BiqCrunch.Cuts`](@ref)
+* [`BiqCrunch.MinCuts`](@ref)
+* [`BiqCrunch.Nitermax`](@ref)
+* [`BiqCrunch.MinNiter`](@ref)
+* [`BiqCrunch.MaxNiter`](@ref)
+* [`BiqCrunch.Scaling`](@ref)
+* [`BiqCrunch.Root`](@ref)
+* [`BiqCrunch.Heur_1`](@ref)
+* [`BiqCrunch.Heur_2`](@ref)
+* [`BiqCrunch.Heur_3`](@ref)
+* [`BiqCrunch.Soln_value_provided`](@ref)
+* [`BiqCrunch.Soln_value`](@ref)
+* [`BiqCrunch.Time_limit`](@ref)
+* [`BiqCrunch.BranchingStrategy`](@ref)
+* [`BiqCrunch.Seed`](@ref)
+* [`BiqCrunch.Local_search`](@ref)
+* [`BiqCrunch.NBGW1`](@ref)
+* [`BiqCrunch.NBGW2`](@ref)
+
+## NOTES:
+* BiqCrunch only supports integer coefficients in the objective function
+and in the constraints. Attempting to solve a model with fractional
+coefficients will raise an ErrorException.
+* If getting a custom BiqCrunch parameter returns `nothing` then that parameter
+is set to the default value of BiqCrunch. See [BiqCrunch's
+documentation](https://biqcrunch.lipn.univ-paris13.fr/BiqCrunch/documentation)
+for information on these parameters.
 
