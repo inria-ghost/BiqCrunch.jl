@@ -53,7 +53,6 @@ function test_runtests()
     MOI.Test.runtests(
         BRIDGED,
         CONFIG,
-        verbose=true,
         exclude=[
             # Deletion errors not related to BiqCrunch
             "test_basic_ScalarAffineFunction_Integer",
@@ -95,7 +94,7 @@ function test_TimeLimitSec()
     paramfile = tempname()
     write(paramfile, "")
     model = BiqCrunch.Optimizer("", paramfile)
-    @test MOI.get(model, MOI.TimeLimitSec()) == nothing
+    @test isnothing(MOI.get(model, MOI.TimeLimitSec()))
 
     MOI.set(model, MOI.TimeLimitSec(), 2.5)
     @test MOI.get(model, MOI.TimeLimitSec()) == 2.5
@@ -131,7 +130,7 @@ function test_TimeLimitSec()
     """
     write(paramfile, params)
     model = BiqCrunch.Optimizer("", paramfile)
-    @test MOI.get(model, MOI.TimeLimitSec()) == nothing
+    @test isnothing(MOI.get(model, MOI.TimeLimitSec()))
     MOI.set(model, MOI.TimeLimitSec(), 2.5)
     new_params = read(model.paramfile, String)
     expected_params = """
@@ -150,7 +149,7 @@ function test_TimeLimitSec()
     maxNiter = 100
     """
     @test new_params == expected_params
-    @test MOI.get(model, MOI.TimeLimitSec()) == nothing
+    @test isnothing(MOI.get(model, MOI.TimeLimitSec()))
 end
 
 
@@ -158,7 +157,7 @@ function test_NodeLimit()
     paramfile = tempname()
     write(paramfile, "")
     model = BiqCrunch.Optimizer("", paramfile)
-    @test MOI.get(model, MOI.NodeLimit()) == nothing
+    @test isnothing(MOI.get(model, MOI.NodeLimit()))
 
     MOI.set(model, MOI.NodeLimit(), 5)
     @test MOI.get(model, MOI.NodeLimit()) == 5
@@ -196,7 +195,7 @@ function test_NodeLimit()
     """
     write(paramfile, params)
     model = BiqCrunch.Optimizer("", paramfile)
-    @test MOI.get(model, MOI.NodeLimit()) == nothing
+    @test isnothing(MOI.get(model, MOI.NodeLimit()))
     MOI.set(model, MOI.NodeLimit(), 2)
     new_params = read(model.paramfile, String)
     expected_params = """
@@ -215,7 +214,7 @@ function test_NodeLimit()
     maxNiter = 100
     """
     @test new_params == expected_params
-    @test MOI.get(model, MOI.NodeLimit()) == nothing
+    @test isnothing(MOI.get(model, MOI.NodeLimit()))
 end
 
 function test_parse_solver_output()

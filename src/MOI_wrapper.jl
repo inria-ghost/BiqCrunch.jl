@@ -346,7 +346,7 @@ end
 MOI.get(::Optimizer, ::MOI.DualStatus) = MOI.NO_SOLUTION
 
 function MOI.get(m::Optimizer, ::MOI.PrimalStatus)
-    if m.solution == nothing || m.solution.infeasible || m.solution.gap !== 0.0
+    if isnothing(m.solution) || m.solution.infeasible || m.solution.gap !== 0.0
         return MOI.NO_SOLUTION
     else
         return MOI.FEASIBLE_POINT
@@ -356,7 +356,7 @@ end
 MOI.get(m::Optimizer, ::MOI.RawStatusString) = m.raw_output_string
 
 function MOI.get(m::Optimizer, ::MOI.TerminationStatus)
-    if m.solution == nothing
+    if isnothing(m.solution)
         return MOI.OPTIMIZE_NOT_CALLED
     elseif m.solution.infeasible
         return MOI.INFEASIBLE
