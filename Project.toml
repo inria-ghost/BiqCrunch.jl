@@ -11,4 +11,5 @@ BiqCrunch_jll = "3dcdc8e4-44ed-57ba-a481-00c2d470a1e6"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 
 [compat]
+BiqCrunch_jll = "2.0.1"
 MathOptInterface = "1.49.0"
