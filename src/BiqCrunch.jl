@@ -58,7 +58,7 @@ function model2bc(model::MOI.ModelLike)
     me = mi = 0
 
     bin_cons = MOI.get(model, MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.ZeroOne}())
-    var_attrs = MOI.get(model, MOI.ListOfVariableAttributesSet())
+    var_attrs = filter(attr -> attr != MOI.VariableName(), MOI.get(model, MOI.ListOfVariableAttributesSet()))
     if length(var_attrs) > 0
         throw(MOI.UnsupportedAttribute(var_attrs[1]))
     end
@@ -104,7 +104,7 @@ function model2bc(model::MOI.ModelLike)
         MOI.get(model, MOI.ListOfConstraintTypesPresent()),
     )
     for (F, S) in constraint_types
-        cons_attrs = MOI.get(model, MOI.ListOfConstraintAttributesSet{F,S}())
+        cons_attrs = filter(attr -> attr != MOI.ConstraintName(), MOI.get(model, MOI.ListOfConstraintAttributesSet{F,S}()))
         if length(cons_attrs) > 0
             throw(MOI.UnsupportedAttribute(cons_attrs[1]))
         end
