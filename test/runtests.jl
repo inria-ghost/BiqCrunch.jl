@@ -92,6 +92,6 @@ end
 
     src = get_fractional_model()
     model = BiqCrunch.Optimizer()
-    @test_throws "BiqCrunch only supports integer coefficients." MOI.optimize!(model, src)
+    @test_throws BiqCrunch.FractionalCoefficient MOI.optimize!(model, src)
 
 end;

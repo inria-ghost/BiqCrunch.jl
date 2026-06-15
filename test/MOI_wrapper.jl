@@ -23,7 +23,7 @@ const CONFIG = MOI.Test.Config(
     optimal_status=MOI.OPTIMAL,
     # Pass attributes or MOI functions to `exclude` to skip tests that
     # rely on this functionality.
-    exclude=Any[MOI.ConstraintDual,],
+    exclude=Any[MOI.ConstraintDual],
 )
 
 """
@@ -53,12 +53,9 @@ function test_runtests()
     MOI.Test.runtests(
         BRIDGED,
         CONFIG,
+        verbose=true,
         exclude=[
-            "test_linear_FEASIBILITY_SENSE", # Requires incremental interface
-            "test_quadratic_nonconvex_constraint_basic", # Requires incremental interface
-            # NOTE: these tests should require incremental interface but do not. 
-            "test_attribute_RawStatusString",
-            "test_attribute_SolveTimeSec",
+            # Deletion errors not related to BiqCrunch
             "test_basic_ScalarAffineFunction_Integer",
             "test_basic_ScalarAffineFunction_Semiinteger",
             "test_basic_ScalarQuadraticFunction_Integer",
@@ -68,7 +65,11 @@ function test_runtests()
             "test_basic_VectorAffineFunction_Circuit",
             "test_basic_VectorOfVariables_Circuit",
             "test_basic_VectorQuadraticFunction_Circuit",
-            "test_model_copy_to_UnsupportedAttribute",
+            # These throw an error in the IntegerToZeroOne Bridge
+            "test_solve_ObjectiveBound_MAX_SENSE_IP",
+            "test_solve_ObjectiveBound_MIN_SENSE_IP",
+            "test_variable_solve_Integer_with_lower_bound",
+            "test_variable_solve_Integer_with_upper_bound"
         ],
         # This argument is useful to prevent tests from failing on future
         # releases of MOI that add new tests. Don't let this number get too far

@@ -74,7 +74,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     NBGW1::Union{Nothing,Int}
     NBGW2::Union{Nothing,Int}
 
-    function Optimizer(bin::String = "", paramfile::String = "")
+    function Optimizer(bin::String="", paramfile::String="")
         m = new()
         if bin == ""
             m.bin = BiqCrunch_jll.generic_bq
@@ -152,7 +152,7 @@ function MOI.is_empty(m::Optimizer)
     return isempty(m.name) &&
            isempty(m.bcfile) &&
            isempty(m.raw_output_string) &&
-           m.solution == nothing
+           isnothing(m.solution)
 end
 
 function Base.summary(io::IO, m::Optimizer)
@@ -247,7 +247,7 @@ end
 
 function MOI.supports_constraint(
     ::Optimizer,
-    ::Type{<:Union{MOI.VariableIndex,MOI.ScalarAffineFunction,MOI.ScalarQuadraticFunction}},
+    ::Type{<:Union{MOI.ScalarAffineFunction,MOI.ScalarQuadraticFunction}},
     ::Type{<:Union{MOI.LessThan{Float64},MOI.GreaterThan{Float64},MOI.EqualTo{Float64}}},
 )
     return true
@@ -313,13 +313,32 @@ function _solve(bq_exe::Function, bq_params::String, bcfile::String)
 end
 
 function MOI.optimize!(m::Optimizer, src::MOI.ModelLike)
-    m.bcfile = tempname()
-    index_map, bcmodel = model2bc(src)
-    write(m.bcfile, bcmodel)
-    m.solution, m.raw_output_string = _solve(m.bin, m.paramfile, m.bcfile)
-    n = length(index_map) # MOI.get(src, MOI.NumberOfVariables())
-    (x -> m.solution.values[x] = 0).(1:n)
-    (x -> m.solution.values[x] = 1).(m.solution.variables)
+    MOI.set(m, MOI.Name(), MOI.get(src, MOI.Name()))
+
+    if isempty(MOI.get(src, MOI.ListOfVariableIndices()))
+        index_map, bcmodel = model2bc(src)
+        m.solution = _Solution(
+            "",
+            "",
+            m.paramfile,
+            0,
+            0.0,
+            false,
+            0,
+            0.0,
+            [],
+            Dict(),
+            0.0,
+        )
+    else
+        m.bcfile = tempname()
+        index_map, bcmodel = model2bc(src)
+        write(m.bcfile, bcmodel)
+        m.solution, m.raw_output_string = _solve(m.bin, m.paramfile, m.bcfile)
+        n = length(index_map) # MOI.get(src, MOI.NumberOfVariables())
+        (x -> m.solution.values[x] = 0).(1:n)
+        (x -> m.solution.values[x] = 1).(m.solution.variables)
+    end
 
     return index_map, false
 end
