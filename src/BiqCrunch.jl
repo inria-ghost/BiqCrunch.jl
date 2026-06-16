@@ -100,7 +100,7 @@ function model2bc(model::MOI.ModelLike)
             throw(MOI.UnsupportedAttribute(attr))
         end
     end
-    if obj_sense == MOI.FEASIBILITY_SENSE
+    if obj_sense == MOI.FEASIBILITY_SENSE && !isempty(vars)
         obj_fun_type = MOI.ScalarAffineFunction{Float64}
         obj_fun = MOI.ScalarAffineFunction(
             [
@@ -111,7 +111,7 @@ function model2bc(model::MOI.ModelLike)
     else
         obj_fun_type = MOI.get(model, MOI.ObjectiveFunctionType())
         obj_fun = MOI.get(model, MOI.ObjectiveFunction{obj_fun_type}())
-        if isconstant(obj_fun)
+        if isconstant(obj_fun) && !isempty(vars)
             add_empty_term!(obj_fun, vars[1])
         end
     end
