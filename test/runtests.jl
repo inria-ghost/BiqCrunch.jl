@@ -3,7 +3,98 @@ import MathOptInterface as MOI
 
 using Test
 
-function get_sample_model()
+function empty_model()
+    return MOI.Utilities.Model{Float64}()
+end
+
+function feas_sense_model()
+    src = MOI.Utilities.Model{Float64}()
+
+    x = MOI.add_variables(src, 3)
+    MOI.add_constraint(src, x[1], MOI.ZeroOne())
+    MOI.add_constraint(src, x[2], MOI.ZeroOne())
+    MOI.add_constraint(src, x[3], MOI.ZeroOne())
+    MOI.add_constraint(
+        src,
+        MOI.ScalarAffineFunction(
+            [MOI.ScalarAffineTerm(1.0, x[1]), MOI.ScalarAffineTerm(1.0, x[2])],
+            0.0,
+        ),
+        MOI.LessThan(1.0)
+    )
+
+    MOI.set(src, MOI.ObjectiveSense(), MOI.FEASIBILITY_SENSE)
+    return src
+
+end
+
+function no_cons_model()
+    src = MOI.Utilities.Model{Float64}()
+
+    x = MOI.add_variables(src, 3)
+    MOI.add_constraint(src, x[1], MOI.ZeroOne())
+    MOI.add_constraint(src, x[2], MOI.ZeroOne())
+    MOI.add_constraint(src, x[3], MOI.ZeroOne())
+
+    obj_fun = MOI.ScalarAffineFunction(
+        [
+            MOI.ScalarAffineTerm(1.0, x[3]),
+            MOI.ScalarAffineTerm(1.0, x[1]),
+            MOI.ScalarAffineTerm(1.0, x[2]),
+        ],
+        2.0,
+    )
+    MOI.set(src, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(src, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), obj_fun)
+    return src
+
+end
+
+function const_obj_model()
+    src = MOI.Utilities.Model{Float64}()
+
+    x = MOI.add_variables(src, 3)
+    MOI.add_constraint(
+        src,
+        MOI.ScalarAffineFunction(
+            [MOI.ScalarAffineTerm(1.0, x[1]), MOI.ScalarAffineTerm(1.0, x[2])],
+            0.0,
+        ),
+        MOI.LessThan(1.0)
+    )
+    MOI.add_constraint(src, x[1], MOI.ZeroOne())
+    MOI.add_constraint(src, x[2], MOI.ZeroOne())
+    MOI.add_constraint(src, x[3], MOI.ZeroOne())
+
+    obj_fun = MOI.ScalarAffineFunction{Float64}([], 5.0)
+    MOI.set(src, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(src, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), obj_fun)
+    return src
+end
+
+function non_binary_model()
+    src = MOI.Utilities.Model{Float64}()
+
+    x = MOI.add_variables(src, 3)
+    MOI.add_constraint(
+        src,
+        MOI.ScalarAffineFunction(
+            [MOI.ScalarAffineTerm(1.0, x[1]), MOI.ScalarAffineTerm(1.0, x[2])],
+            0.0,
+        ),
+        MOI.LessThan(1.0)
+    )
+    MOI.add_constraint(src, x[1], MOI.ZeroOne())
+    MOI.add_constraint(src, x[3], MOI.ZeroOne())
+
+    obj_fun = MOI.ScalarAffineFunction{Float64}([], 5.0)
+    MOI.set(src, MOI.ObjectiveSense(), MOI.MAX_SENSE)
+    MOI.set(src, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(), obj_fun)
+    return src
+
+end
+
+function sample_model()
     src = MOI.Utilities.Model{Float64}()
 
     x = MOI.add_variables(src, 3)
@@ -40,7 +131,7 @@ function get_sample_model()
     return src
 end
 
-function get_fractional_model()
+function fractional_model()
     src = MOI.Utilities.Model{Float64}()
 
     x = MOI.add_variables(src, 3)
@@ -75,7 +166,7 @@ end
 
 
 @testset "e2e" begin
-    src = get_sample_model()
+    src = sample_model()
     model = BiqCrunch.Optimizer()
 
     index, _ = MOI.optimize!(model, src)
@@ -90,8 +181,34 @@ end
     @test obj_values == [1, 0, 1]
     @test MOI.get(model, MOI.NodeCount()) == 1
 
-    src = get_fractional_model()
+    src = fractional_model()
     model = BiqCrunch.Optimizer()
     @test_throws BiqCrunch.FractionalCoefficient MOI.optimize!(model, src)
+
+    src = non_binary_model()
+    model = BiqCrunch.Optimizer()
+    @test_throws BiqCrunch.VariableNotBinary MOI.optimize!(model, src)
+
+    src = empty_model()
+    model = BiqCrunch.Optimizer()
+    MOI.optimize!(model, src)
+    @test MOI.get(model, MOI.SolveTimeSec()) == 0.0
+    @test MOI.get(model, MOI.ObjectiveValue()) == 0.0
+    @test MOI.get(model, MOI.TerminationStatus()) == MOI.OPTIMAL
+
+    src = feas_sense_model()
+    model = BiqCrunch.Optimizer()
+    MOI.optimize!(model, src)
+    @test MOI.get(model, MOI.ObjectiveValue()) == 0.0
+
+    src = no_cons_model()
+    model = BiqCrunch.Optimizer()
+    MOI.optimize!(model, src)
+    @test MOI.get(model, MOI.ObjectiveValue()) == 5.0
+
+    src = const_obj_model()
+    model = BiqCrunch.Optimizer()
+    MOI.optimize!(model, src)
+    @test MOI.get(model, MOI.ObjectiveValue()) == 5.0
 
 end;
