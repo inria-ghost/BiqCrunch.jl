@@ -49,6 +49,22 @@ function getijval(f::MOI.ScalarQuadraticFunction{Float64}, n, m, index_map)
     return q
 end
 
+function isconstant(f::MOI.ScalarAffineFunction{Float64})
+    return isempty(f.terms)
+end
+
+function isconstant(f::MOI.ScalarQuadraticFunction{Float64})
+    return isempty(f.quadratic_terms) && isempty(f.affine_terms)
+end
+
+function add_empty_term!(f::MOI.ScalarAffineFunction{Float64}, x)
+    push!(f.terms, MOI.ScalarAffineTerm(0.0, x))
+end
+
+function add_empty_term!(f::MOI.ScalarQuadraticFunction{Float64}, x)
+    push!(f.affine_terms, MOI.ScalarAffineTerm(0.0, x))
+end
+
 
 function model2bc(model::MOI.ModelLike)
     vars = MOI.get(model, MOI.ListOfVariableIndices())
@@ -95,6 +111,9 @@ function model2bc(model::MOI.ModelLike)
     else
         obj_fun_type = MOI.get(model, MOI.ObjectiveFunctionType())
         obj_fun = MOI.get(model, MOI.ObjectiveFunction{obj_fun_type}())
+        if isconstant(obj_fun)
+            add_empty_term!(obj_fun, vars[1])
+        end
     end
     Q *= getijval(obj_fun, n, 0, index_map)
 

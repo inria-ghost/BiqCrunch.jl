@@ -8,7 +8,7 @@ mutable struct _Solution
     nodes::Int64
     rnode_bound::Float64
     infeasible::Bool
-    obj_value::Int64
+    obj_value::Float64
     gap::Float64
     variables::Vector{Int64}
     values::Dict{Int64,Int64}
@@ -288,7 +288,7 @@ function _parse_solver_output(output::String)
             parse(Int, m["nodes"]),
             parse(Float64, m["rnode_bound"]),
             m["status_infeasible"] !== nothing,
-            parse(Int, something(m["obj_value"], m["best_value"], "0")),
+            parse(Float64, something(m["obj_value"], m["best_value"], "0")),
             parse(Float64, something(m["gap"], "0.0")),
             parse.(Int, split(something(m["sol"], ""))),
             Dict(),
@@ -335,6 +335,10 @@ function MOI.optimize!(m::Optimizer, src::MOI.ModelLike)
         index_map, bcmodel = model2bc(src)
         write(m.bcfile, bcmodel)
         m.solution, m.raw_output_string = _solve(m.bin, m.paramfile, m.bcfile)
+        if MOI.get(src, MOI.ObjectiveSense()) != MOI.FEASIBILITY_SENSE
+            obj_fun_type = MOI.get(src, MOI.ObjectiveFunctionType())
+            m.solution.obj_value += MOI.constant(MOI.get(src, MOI.ObjectiveFunction{obj_fun_type}()))
+        end
         n = length(index_map) # MOI.get(src, MOI.NumberOfVariables())
         (x -> m.solution.values[x] = 0).(1:n)
         (x -> m.solution.values[x] = 1).(m.solution.variables)
@@ -375,7 +379,7 @@ end
 
 MOI.get(::Optimizer, ::MOI.ResultCount) = 1
 
-MOI.get(m::Optimizer, ::MOI.ObjectiveValue) = float(m.solution.obj_value)
+MOI.get(m::Optimizer, ::MOI.ObjectiveValue) = m.solution.obj_value
 
 MOI.get(m::Optimizer, ::MOI.SolveTimeSec) = m.solution.cpu_time
 
