@@ -103,7 +103,7 @@ List of supported solver-specific attributes:
 ## Notes
 * BiqCrunch only supports integer coefficients in the objective function
 and in the constraints. Attempting to solve a model with fractional
-coefficients will raise an [`FractionalCoefficient`](@ref) error.
+coefficients will raise a [`FractionalCoefficient`](@ref) error.
 * If getting a custom BiqCrunch parameter returns `nothing` then that parameter
 is set to the default value of BiqCrunch. See [BiqCrunch's
 documentation](https://biqcrunch.lipn.univ-paris13.fr/BiqCrunch/documentation)
